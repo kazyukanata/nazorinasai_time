@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>トコトコ線なぞりウォーク</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            -webkit-touch-callout: none;
+        }
+        body {
+            background-color: #0f172a;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+        }
+        /* アニメーション effects */
+        @keyframes pulse-glow {
+            0%, 100% { filter: drop-shadow(0 0 15px rgba(244, 63, 94, 0.6)); }
+            50% { filter: drop-shadow(0 0 25px rgba(244, 63, 94, 0.9)); }
+        }
+        .glow-title {
+            animation: pulse-glow 2.5s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-0 m-0 text-white select-none">
+
+    <!-- ゲーム本体コンテナ（iPhone15 画面比率アスペクト比考慮） -->
+    <div id="game-container" class="relative w-full max-w-[393px] h-[100vh] max-h-[852px] bg-slate-900 shadow-2xl overflow-hidden flex flex-col justify-between rounded-none sm:rounded-3xl border-0 sm:border-4 border-slate-800">
+        
+        <!-- ヘッダーUI（スコア・タイマー） -->
+        <div id="ui-header" class="absolute top-0 left-0 right-0 z-10 flex justify-between items-center px-5 pt-8 pb-4 bg-gradient-to-b from-slate-950/80 to-transparent pointer-events-none">
+            <div class="flex flex-col">
+                <span class="text-xs text-slate-400 font-bold uppercase tracking-wider">TIME</span>
+                <span id="timer-display" class="text-3xl font-black text-amber-400 font-mono tracking-tight">60.0s</span>
+            </div>
+            <div class="flex flex-col text-center">
+                <span class="text-xs text-slate-400 font-bold uppercase tracking-wider">STAGE</span>
+                <span id="stage-type-display" class="text-xs font-bold text-pink-400 bg-pink-950/60 px-2 py-0.5 rounded-full border border-pink-500/30">スタート前</span>
+            </div>
+            <div class="flex flex-col text-right">
+                <span class="text-xs text-slate-400 font-bold uppercase tracking-wider">CLEAR</span>
+                <span id="score-display" class="text-3xl font-black text-emerald-400 font-mono tracking-tight">0</span>
+            </div>
+        </div>
+
+        <!-- Canvas描画領域 -->
+        <canvas id="gameCanvas" class="w-full h-full block bg-slate-900 cursor-pointer"></canvas>
+
+        <!-- メッセージ・エフェクト表示用オーバレイ -->
+        <div id="status-message" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none opacity-0 transition-opacity duration-200 text-center">
+            <span id="status-text" class="text-4xl font-black px-6 py-3 rounded-2xl shadow-xl border-2 backdrop-blur-md inline-block"></span>
+        </div>
+
+        <!-- ==================== トップ画面 ==================== -->
+        <div id="screen-start" class="absolute inset-0 z-30 flex flex-col items-center justify-between p-8 bg-slate-950/90 backdrop-blur-md transition-all duration-300">
+            <div class="my-auto text-center flex flex-col items-center">
+                <div class="mb-4 inline-block p-4 bg-rose-500/10 rounded-full border border-rose-500/30 glow-title">
+                    <svg class="w-16 h-16 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <h1 class="text-3xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-pink-400 to-amber-300 mb-2">
+                    トコトコ<br>線なぞりウォーク
+                </h1>
+                <p class="text-slate-400 text-sm font-medium mb-6">線の上を端から端まで歩ききろう！</p>
+                
+                <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 text-xs text-slate-300 text-left space-y-2 mb-6 max-w-xs">
+                    <p class="flex items-center"><span class="w-2 h-2 rounded-full bg-emerald-400 mr-2"></span>緑のスタート丸に指を置いてスタート！</p>
+                    <p class="flex items-center"><span class="w-2 h-2 rounded-full bg-emerald-400 mr-2"></span>青いゴール丸まで端から端までなぞればクリア！</p>
+                    <p class="flex items-center"><span class="w-2 h-2 rounded-full bg-amber-400 mr-2"></span>途中で指を離すと、最初からやり直し！</p>
+                </div>
+
+                <div class="inline-flex items-center px-4 py-2 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-full text-xs font-bold tracking-wide">
+                    ⏱️ 60秒スコアアタック
+                </div>
+            </div>
+
+            <button id="btn-start" class="w-full py-4 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 active:scale-95 text-white font-black text-xl rounded-2xl shadow-lg shadow-rose-500/30 transition-all duration-150 border-t border-white/20">
+                ゲームスタート！
+            </button>
+        </div>
+
+        <!-- ==================== リザルト画面 ==================== -->
+        <div id="screen-result" class="absolute inset-0 z-30 flex flex-col items-center justify-between p-8 bg-slate-950/95 backdrop-blur-lg hidden">
+            <div class="my-auto text-center w-full flex flex-col items-center">
+                <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-rose-400 to-pink-500 mb-6">
+                    タイムアップ！！
+                </h2>
+
+                <div class="w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 mb-6">
+                    <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                        <span class="text-slate-400 text-sm font-bold">クリアした本数</span>
+                        <span id="result-clear" class="text-4xl font-black text-emerald-400 font-mono">0</span>
+                    </div>
+                    <div class="pt-1">
+                        <span class="text-xs text-amber-400 font-medium">※ スクショしてSNSに自慢してね！ 📸</span>
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-retry" class="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 active:scale-95 text-white font-black text-xl rounded-2xl shadow-lg shadow-emerald-500/30 transition-all duration-150 border-t border-white/20">
+                もう一度挑戦！
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // ==========================================
+        // ゲーム設定 & 定数
+        // ==========================================
+        const GAME_TIME = 60.0;           // 制限時間（秒）
+        const LINE_WIDTH = 40;            // 線の太さ（なぞりやすく太め）
+        const HIT_RADIUS = LINE_WIDTH / 2; // 当たり判定許容半径
+        const NPC_COUNT = 12;
+        const START_RADIUS = 44;          // スタート丸として受け付ける半径
+        const TOLERANCE = HIT_RADIUS + 14; // 線から外れてよい最大距離（やや甘め）
+        const SAMPLE_STEP = 2;            // 線を細かく分割する間隔(px)
+        const SEARCH_WINDOW = 12;         // 進捗を探す範囲（点数=約20px）。近道・ワープ・曲がり角のショートカット防止
+        const END_MARGIN = 10;            // ゴール到達とみなす終点からの点数             // 背景NPCの数（10〜15体）
+
+        // 状態管理
+        let gameState = 'START'; // 'START', 'PLAYING', 'GAMEOVER'
+        let timer = GAME_TIME;
+        let clearCount = 0;
+        let lastTime = 0;
+
+        // タッチ / 移動管理
+        let isTouching = false;
+        let fingerPos = { x: 0, y: 0 };
+        let prevFingerPos = { x: 0, y: 0 };
+        let fingerSpeed = 0;
+
+        // プレイヤー歩行管理
+        let playerWalkFrame = 0;
+        let currentLinePoints = [];
+        let currentPointIndex = 0; // 線上で最も近い点のインデックス
+        let lineCompleted = false;
+
+        // 背景NPCリスト
+        let npcs = [];
+
+        // DOM要素
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const screenStart = document.getElementById('screen-start');
+        const screenResult = document.getElementById('screen-result');
+        const btnStart = document.getElementById('btn-start');
+        const btnRetry = document.getElementById('btn-retry');
+        const timerDisplay = document.getElementById('timer-display');
+        const scoreDisplay = document.getElementById('score-display');
+        const stageTypeDisplay = document.getElementById('stage-type-display');
+        const resultClear = document.getElementById('result-clear');
+        const statusMessage = document.getElementById('status-message');
+        const statusText = document.getElementById('status-text');
+
+        // ==========================================
+        // Canvas リサイズ処理（画面高精細化対応）
+        // ==========================================
+        let canvasWidth = 393;
+        let canvasHeight = 852;
+
+        function resizeCanvas() {
+            const container = document.getElementById('game-container');
+            const rect = container.getBoundingClientRect();
+            
+            canvasWidth = rect.width;
+            canvasHeight = rect.height;
+
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = canvasWidth * dpr;
+            canvas.height = canvasHeight * dpr;
+            ctx.scale(dpr, dpr);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        // ==========================================
+        // 線の生成ロジック（6種類）
+        // ==========================================
+        const LINE_TYPES = [
+            'WAVE',     // 波線（サイン波）
+            'SPIRAL',   // ぐるぐる（スパイラル）
+            'ZIGZAG',   // ジグザグ（折れ線）
+            'SCURVE',   // S字カーブ
+            'ARC',      // 円弧
+            'BEZIER',    // Bezier曲線
+            'LOOP',     // ループ（宙返り）
+            'FIGURE8',  // 8の字
+            'HEART',    // ハート
+            'STEPS',    // 階段（直角ジグザグ）
+            'SNAKE',    // 蛇行（Uターン）
+            'MOUNTAIN', // ギザギザ山道（ランダム折れ線）
+            'STAR',     // 星（一筆書き）
+            'SQSPIRAL', // 四角いうずまき
+            'GROWWAVE', // ふくらむ波
+            'SCALLOP',  // フリル（半円の連続）
+            'DSPIRAL'   // ダブルうずまき
+        ];
+
+        const LINE_NAMES = {
+            'WAVE': '波線コース',
+            'SPIRAL': 'ぐるぐるコース',
+            'ZIGZAG': 'ジグザグコース',
+            'SCURVE': 'S字カーブ',
+            'ARC': '円弧コース',
+            'BEZIER': 'うねうねベジェ',
+            'LOOP': 'ループコース',
+            'FIGURE8': '8の字コース',
+            'HEART': 'ハートコース',
+            'STEPS': '階段コース',
+            'SNAKE': 'へびコース',
+            'MOUNTAIN': 'ギザギザ山道',
+            'STAR': '星コース',
+            'SQSPIRAL': '四角うずまき',
+            'GROWWAVE': 'ふくらむ波',
+            'SCALLOP': 'フリルコース',
+            'DSPIRAL': 'ダブルうずまき'
+        };
+
+        let lastLineType = null; // 直前の線の種類（連続防止）
+
+        function generateRandomLine() {
+            const candidates = LINE_TYPES.filter(t => t !== lastLineType);
+            const type = candidates[Math.floor(Math.random() * candidates.length)];
+            lastLineType = type;
+            stageTypeDisplay.textContent = LINE_NAMES[type];
+            
+            const points = [];
+            const marginHeader = 100;
+            const marginFooter = 80;
+            const playableHeight = canvasHeight - marginHeader - marginFooter;
+
+            const startX = canvasWidth * (0.2 + Math.random() * 0.6);
+            const startY = canvasHeight - marginFooter - 20;
+
+            if (type === 'WAVE') {
+                const waveCount = 2 + Math.random() * 1.2;
+                const amplitude = 50 + Math.random() * 30;
+                const totalSteps = 150;
+                const endY = marginHeader + 30;
+
+                for (let i = 0; i <= totalSteps; i++) {
+                    const progress = i / totalSteps;
+                    const y = startY - (startY - endY) * progress;
+                    const x = clamp(startX, 30 + amplitude, canvasWidth - 30 - amplitude) + Math.sin(progress * Math.PI * 2 * waveCount) * amplitude;
+                    points.push({ x: clamp(x, 30, canvasWidth - 30), y });
+                }
+            } 
+            else if (type === 'SPIRAL') {
+                const centerX = canvasWidth / 2 + (Math.random() - 0.5) * 20;
+                const centerY = canvasHeight / 2;
+                const maxRadius = Math.min(canvasWidth, playableHeight) * 0.38;
+                const turns = 2 + Math.random() * 0.5;
+                const dir = Math.random() < 0.5 ? 1 : -1;
+                const a0 = Math.random() * Math.PI * 2;
+                const totalSteps = 200;
+
+                for (let i = 0; i <= totalSteps; i++) {
+                    const progress = i / totalSteps;
+                    const angle = a0 + dir * progress * Math.PI * 2 * turns;
+                    const radius = maxRadius * (1 - progress * 0.85);
+                    points.push({ x: centerX + Math.cos(angle) * radius, y: centerY + Math.sin(angle) * radius });
+                }
+                // 半分の確率で中心から外へ向かう渦巻きにする
+                if (Math.random() < 0.5) points.reverse();
+            } 
+            else if (type === 'ZIGZAG') {
+                const zigzags = 4;
+                const totalSteps = 160;
+                const endY = marginHeader + 40;
+                const amplitude = 70 + Math.random() * 30;
+
+                for (let i = 0; i <= totalSteps; i++) {
+                    const progress = i / totalSteps;
+                    const y = startY - (startY - endY) * progress;
+                    const cycle = progress * zigzags;
+                    const phase = cycle % 1;
+                    let xOffset = 0;
+                    if (phase < 0.5) {
+                        xOffset = (-0.5 + phase * 2) * amplitude;
+                    } else {
+                        xOffset = (0.5 - (phase - 0.5) * 2) * amplitude;
+                    }
+                    points.push({ x: clamp(startX + xOffset, 30, canvasWidth - 30), y });
+                }
+            } 
+            else if (type === 'SCURVE') {
+                const totalSteps = 160;
+                const top = marginHeader + 30;
+                const amp = 105 + Math.random() * 20;
+                const cycles = 1.25;
+                const cx = canvasWidth / 2;
+                for (let i = 0; i <= totalSteps; i++) {
+                    const t = i / totalSteps;
+                    points.push({
+                        x: clamp(cx + Math.sin(t * Math.PI * 2 * cycles) * amp, 30, canvasWidth - 30),
+                        y: startY - (startY - top) * t
+                    });
+                }
+            } 
+            else if (type === 'ARC') {
+                const totalSteps = 140;
+                const centerX = canvasWidth / 2;
+                const centerY = marginHeader + playableHeight / 2;
+                const rx = Math.min(canvasWidth / 2 - 55, 135);
+                const ry = Math.min(playableHeight * 0.36, 240);
+                const a0 = Math.random() * Math.PI * 2;
+                const dir = Math.random() < 0.5 ? 1 : -1;
+                const sweep = Math.PI * 1.6;
+
+                for (let i = 0; i <= totalSteps; i++) {
+                    const t = i / totalSteps;
+                    const angle = a0 + dir * sweep * t;
+                    points.push({ x: centerX + Math.cos(angle) * rx, y: centerY + Math.sin(angle) * ry });
+                }
+            } 
+            else if (type === 'BEZIER') {
+                // 左右に振れる点をなめらかにつなぐ（Catmull-Rom）
+                const n = 6;
+                const top = marginHeader + 30;
+                let left = Math.random() < 0.5;
+                const wp = [];
+                for (let i = 0; i < n; i++) {
+                    const x = left ? 70 + Math.random() * 70
+                                   : canvasWidth - 70 - Math.random() * 70;
+                    wp.push({ x, y: startY - (startY - top) * i / (n - 1) });
+                    left = !left;
+                }
+                const segSteps = 26;
+                for (let i = 0; i < n - 1; i++) {
+                    const p0 = wp[Math.max(i - 1, 0)], p1 = wp[i], p2 = wp[i + 1], p3 = wp[Math.min(i + 2, n - 1)];
+                    for (let k = (i === 0 ? 0 : 1); k <= segSteps; k++) {
+                        const t = k / segSteps, t2 = t * t, t3 = t2 * t;
+                        const cr = (a, b, c, d) => 0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+                        points.push({
+                            x: clamp(cr(p0.x, p1.x, p2.x, p3.x), 30, canvasWidth - 30),
+                            y: cr(p0.y, p1.y, p2.y, p3.y)
+                        });
+                    }
+                }
+            }
+
+            else if (type === 'LOOP') {
+                const loops = 2.5;
+                const a = (playableHeight - 80) / (Math.PI * 2 * loops);
+                const b = a * 1.9;
+                const cx = canvasWidth / 2 + (Math.random() - 0.5) * 40;
+                const thetaMax = Math.PI * 2 * loops;
+                const totalSteps = 260;
+                for (let i = 0; i <= totalSteps; i++) {
+                    const th = thetaMax * i / totalSteps;
+                    const along = a * th - b * Math.sin(th);
+                    const lateral = -b * Math.cos(th);
+                    points.push({ x: clamp(cx + lateral, 30, canvasWidth - 30), y: startY - 30 - along });
+                }
+            }
+            else if (type === 'FIGURE8') {
+                const cx = canvasWidth / 2;
+                const cy = marginHeader + playableHeight / 2;
+                const Rx = Math.min(canvasWidth / 2 - 60, 85);
+                const Ry = Math.min(playableHeight * 0.37, 250);
+                const t0 = Math.PI * 1.5;
+                const t1 = Math.PI * 3.5 - 0.7;
+                const totalSteps = 260;
+                for (let i = 0; i <= totalSteps; i++) {
+                    const t = t0 + (t1 - t0) * i / totalSteps;
+                    points.push({ x: cx + Rx * Math.sin(2 * t), y: cy - Ry * Math.sin(t) });
+                }
+            }
+            else if (type === 'HEART') {
+                const cx = canvasWidth / 2;
+                const cy = marginHeader + playableHeight / 2;
+                const scale = Math.min((playableHeight - 40) / 29, (canvasWidth - 80) / 32);
+                const t0 = Math.PI + 0.8;
+                const t1 = Math.PI * 3 - 0.8;
+                const totalSteps = 200;
+                for (let i = 0; i <= totalSteps; i++) {
+                    const t = t0 + (t1 - t0) * i / totalSteps;
+                    const hx = 16 * Math.pow(Math.sin(t), 3);
+                    const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+                    points.push({ x: cx + hx * scale, y: cy - (hy + 2.5) * scale });
+                }
+            }
+            else if (type === 'STEPS') {
+                const rows = 5 + Math.floor(Math.random() * 2);
+                const top = marginHeader + 30;
+                const v = (startY - top) / rows;
+                const cx = canvasWidth / 2 + (Math.random() - 0.5) * 40;
+                const h = 120 + Math.random() * 30;
+                const xs = [cx - h / 2, cx + h / 2];
+                let side = Math.random() < 0.5 ? 0 : 1;
+                let y = startY;
+                points.push({ x: xs[side], y });
+                for (let i = 0; i < rows; i++) {
+                    y -= v;
+                    points.push({ x: xs[side], y });
+                    if (i < rows - 1) {
+                        side = 1 - side;
+                        points.push({ x: xs[side], y });
+                    }
+                }
+            }
+            else if (type === 'SNAKE') {
+                const rows = 4;
+                const r = 46;
+                const xL = 56 + r;
+                const xR = canvasWidth - 56 - r;
+                let y = marginHeader + (playableHeight + (rows - 1) * 2 * r) / 2;
+                let goingRight = true;
+                points.push({ x: xL, y });
+                for (let row = 0; row < rows; row++) {
+                    const endX = goingRight ? xR : xL;
+                    points.push({ x: endX, y });
+                    if (row < rows - 1) {
+                        const cyArc = y - r;
+                        for (let k = 1; k <= 24; k++) {
+                            const t = k / 24;
+                            const ang = goingRight ? (Math.PI / 2 - Math.PI * t) : (Math.PI / 2 + Math.PI * t);
+                            points.push({ x: endX + Math.cos(ang) * r, y: cyArc + Math.sin(ang) * r });
+                        }
+                        y -= r * 2;
+                        goingRight = !goingRight;
+                    }
+                }
+            }
+            else if (type === 'MOUNTAIN') {
+                const segs = 6;
+                const top = marginHeader + 30;
+                let prevX = 60 + Math.random() * (canvasWidth - 120);
+                points.push({ x: prevX, y: startY });
+                for (let i = 1; i <= segs; i++) {
+                    let nx;
+                    let tries = 0;
+                    do {
+                        nx = 55 + Math.random() * (canvasWidth - 110);
+                        tries++;
+                    } while (Math.abs(nx - prevX) < 110 && tries < 30);
+                    points.push({ x: nx, y: startY - (startY - top) * i / segs });
+                    prevX = nx;
+                }
+            }
+
+            else if (type === 'STAR') {
+                const cx = canvasWidth / 2;
+                const cy = marginHeader + playableHeight / 2;
+                const R = Math.min(canvasWidth / 2 - 45, 150);
+                const rot = (Math.random() - 0.5) * 0.4;
+                [0, 2, 4, 1, 3].forEach(k => {
+                    const a = -Math.PI / 2 + rot + Math.PI * 2 * k / 5;
+                    points.push({ x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R });
+                });
+            }
+            else if (type === 'SQSPIRAL') {
+                const step = 54;
+                let len = 250;
+                const cx = canvasWidth / 2;
+                const cy = marginHeader + playableHeight / 2;
+                let x = cx - len / 2;
+                let y = cy - len / 2;
+                const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+                points.push({ x, y });
+                for (let s = 0; s < 7; s++) {
+                    const d = dirs[s % 4];
+                    x += d[0] * len;
+                    y += d[1] * len;
+                    points.push({ x, y });
+                    if (s % 2 === 1) len -= step;
+                }
+            }
+            else if (type === 'GROWWAVE') {
+                const totalSteps = 220;
+                const top = marginHeader + 30;
+                const cx = canvasWidth / 2;
+                const cycles = 3;
+                for (let i = 0; i <= totalSteps; i++) {
+                    const t = i / totalSteps;
+                    const amp = 12 + 88 * t;
+                    points.push({
+                        x: cx + Math.sin(t * Math.PI * 2 * cycles) * amp,
+                        y: startY - (startY - top) * t
+                    });
+                }
+            }
+            else if (type === 'SCALLOP') {
+                const n = 5;
+                const r = 62;
+                const cx = canvasWidth / 2 - r / 2 + (Math.random() - 0.5) * 30;
+                let y = marginHeader + (playableHeight + 2 * r * n) / 2;
+                for (let i = 0; i < n; i++) {
+                    const cyArc = y - r;
+                    for (let k = 0; k <= 20; k++) {
+                        const ang = Math.PI / 2 - Math.PI * k / 20;
+                        points.push({ x: cx + Math.cos(ang) * r, y: cyArc + Math.sin(ang) * r });
+                    }
+                    y -= 2 * r;
+                }
+            }
+            else if (type === 'DSPIRAL') {
+                const R = Math.min(canvasWidth / 2 - 50, 120);
+                const gap = 30;
+                const cx = canvasWidth / 2;
+                const c1y = marginHeader + (playableHeight - (4 * R + gap)) / 2 + R;
+                const c2y = c1y + 2 * R + gap;
+                const turns = 1.25;
+                const steps = 120;
+                // 1つ目：中心から外へ（終点は真下）
+                const a0 = Math.PI / 2 - Math.PI * 2 * turns;
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const r = R * (0.1 + 0.9 * t);
+                    const a = a0 + Math.PI * 2 * turns * t;
+                    points.push({ x: cx + Math.cos(a) * r, y: c1y + Math.sin(a) * r });
+                }
+                // 2つ目：真上から中心へ（逆回り）
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const r = R * (1 - 0.9 * t);
+                    const a = -Math.PI / 2 - Math.PI * 2 * turns * t;
+                    points.push({ x: cx + Math.cos(a) * r, y: c2y + Math.sin(a) * r });
+                }
+            }
+
+            // 左右・上下をランダムに反転して、同じ種類でも見た目を変える
+            if (Math.random() < 0.5) {
+                points.forEach(pt => { pt.x = canvasWidth - pt.x; });
+            }
+            if (type !== 'HEART' && Math.random() < 0.5) {
+                const yMid = marginHeader + (canvasHeight - marginFooter);
+                points.forEach(pt => { pt.y = yMid - pt.y; });
+            }
+
+            return points;
+        }
+
+        // 線を一定間隔の細かい点列に変換（進捗判定を正確にするため）
+        function resampleLine(pts, step = SAMPLE_STEP) {
+            const out = [{ x: pts[0].x, y: pts[0].y }];
+            let last = out[0];
+            for (let i = 1; i < pts.length; i++) {
+                const b = pts[i];
+                let d = Math.hypot(b.x - last.x, b.y - last.y);
+                while (d >= step) {
+                    const t = step / d;
+                    last = { x: last.x + (b.x - last.x) * t, y: last.y + (b.y - last.y) * t };
+                    out.push(last);
+                    d = Math.hypot(b.x - last.x, b.y - last.y);
+                }
+            }
+            const end = pts[pts.length - 1];
+            if (Math.hypot(end.x - last.x, end.y - last.y) > 0.5) out.push({ x: end.x, y: end.y });
+            return out;
+        }
+
+        function clamp(val, min, max) {
+            return Math.max(min, Math.min(max, val));
+        }
+
+        // ==========================================
+        // 背景NPC初期化 & 更新
+        // ==========================================
+        function initNPCs() {
+            ensureFingerSprites();
+            npcs = [];
+            for (let i = 0; i < NPC_COUNT; i++) {
+                npcs.push({
+                    x: Math.random() * (canvasWidth - 40) + 20,
+                    y: Math.random() * (canvasHeight - 100) + 50,
+                    vx: (Math.random() - 0.5) * 1.5,
+                    vy: (Math.random() - 0.5) * 1.5,
+                    walkFrame: Math.random() * 100,
+                    angle: Math.random() * Math.PI * 2,
+                    skin: Math.floor(Math.random() * SKINS.length)
+                });
+            }
+        }
+
+        function updateNPCs() {
+            npcs.forEach(npc => {
+                npc.x += npc.vx;
+                npc.y += npc.vy;
+                npc.walkFrame += 0.15;
+
+                // 画面端で反射
+                if (npc.x < 20 || npc.x > canvasWidth - 20) {
+                    npc.vx *= -1;
+                    npc.x = clamp(npc.x, 20, canvasWidth - 20);
+                }
+                if (npc.y < 50 || npc.y > canvasHeight - 50) {
+                    npc.vy *= -1;
+                    npc.y = clamp(npc.y, 50, canvasHeight - 50);
+                }
+
+                // 移動方向角
+                npc.angle = Math.atan2(npc.vy, npc.vx);
+            });
+        }
+
+        // ==========================================
+        // 指キャラ（足キャラ）描画関数
+        // ==========================================
+        // ==========================================
+        // リアルな人差し指＆中指の指先（背景NPC用スプライト）
+        // ==========================================
+        const SKINS = [
+            { base: '#f1c9a8', light: '#fbe3cf', dark: '#cf9c78', nail1: '#fff1ee', nail2: '#efb9af' },
+            { base: '#e8b48c', light: '#f6d2b6', dark: '#c48a62', nail1: '#fdebe5', nail2: '#e9aea1' },
+            { base: '#d99e73', light: '#ecbf9b', dark: '#b27a52', nail1: '#f8e0d8', nail2: '#dd9f90' },
+            { base: '#bb7d55', light: '#d79d77', dark: '#935c3b', nail1: '#eed0c4', nail2: '#c98f7f' },
+            { base: '#9a6240', light: '#b8805b', dark: '#744629', nail1: '#e0bfb0', nail2: '#b57f6d' },
+            { base: '#7a4a30', light: '#96644a', dark: '#5a3320', nail1: '#d3b0a0', nail2: '#a06f5d' }
+        ];
+        const FS = 3;            // スプライトの解像度倍率
+        const FW = 24, FH = 46;  // スプライトの論理サイズ
+        const fingerSprites = [];
+
+        function buildFingerSprite(skin, w) {
+            const c = document.createElement('canvas');
+            c.width = FW * FS;
+            c.height = FH * FS;
+            const g = c.getContext('2d');
+            g.scale(FS, FS);
+
+            const cx = FW / 2, ty = 3, len = FH - ty, r = w / 2;
+
+            // 指本体（先端がやや細くなる形）
+            g.beginPath();
+            g.moveTo(cx - r * 0.92, ty + len);
+            g.lineTo(cx - r, ty + r * 1.4);
+            g.bezierCurveTo(cx - r, ty + r * 0.25, cx - r * 0.55, ty, cx, ty);
+            g.bezierCurveTo(cx + r * 0.55, ty, cx + r, ty + r * 0.25, cx + r, ty + r * 1.4);
+            g.lineTo(cx + r * 0.92, ty + len);
+            g.closePath();
+            const body = g.createLinearGradient(cx - r, 0, cx + r, 0);
+            body.addColorStop(0, skin.dark);
+            body.addColorStop(0.3, skin.light);
+            body.addColorStop(0.62, skin.base);
+            body.addColorStop(1, skin.dark);
+            g.fillStyle = body;
+            g.fill();
+            g.lineWidth = 0.7;
+            g.strokeStyle = 'rgba(60, 30, 15, 0.35)';
+            g.stroke();
+
+            // 爪
+            const nw = w * 0.62, nTop = ty + 2.2, nH = 11;
+            g.beginPath();
+            g.moveTo(cx - nw / 2, nTop + nH * 0.78);
+            g.lineTo(cx - nw / 2, nTop + nH * 0.3);
+            g.quadraticCurveTo(cx - nw / 2, nTop, cx, nTop);
+            g.quadraticCurveTo(cx + nw / 2, nTop, cx + nw / 2, nTop + nH * 0.3);
+            g.lineTo(cx + nw / 2, nTop + nH * 0.78);
+            g.quadraticCurveTo(cx + nw / 2, nTop + nH, cx, nTop + nH);
+            g.quadraticCurveTo(cx - nw / 2, nTop + nH, cx - nw / 2, nTop + nH * 0.78);
+            g.closePath();
+            const nail = g.createLinearGradient(0, nTop, 0, nTop + nH);
+            nail.addColorStop(0, skin.nail1);
+            nail.addColorStop(0.35, skin.nail1);
+            nail.addColorStop(1, skin.nail2);
+            g.fillStyle = nail;
+            g.fill();
+            g.lineWidth = 0.6;
+            g.strokeStyle = 'rgba(110, 50, 40, 0.4)';
+            g.stroke();
+
+            // 爪のツヤ
+            g.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            g.beginPath();
+            g.ellipse(cx - nw * 0.17, nTop + nH * 0.3, nw * 0.1, nH * 0.17, -0.2, 0, Math.PI * 2);
+            g.fill();
+
+            // 関節のしわ
+            g.strokeStyle = 'rgba(90, 50, 30, 0.38)';
+            g.lineWidth = 0.6;
+            [26, 29.5].forEach(yy => {
+                g.beginPath();
+                g.moveTo(cx - r * 0.6, yy);
+                g.quadraticCurveTo(cx, yy + 1.3, cx + r * 0.6, yy);
+                g.stroke();
+            });
+
+            // 付け根側を透明にフェードアウト（指先だけが見える）
+            g.globalCompositeOperation = 'destination-out';
+            const fade = g.createLinearGradient(0, 24, 0, FH);
+            fade.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            fade.addColorStop(1, 'rgba(0, 0, 0, 1)');
+            g.fillStyle = fade;
+            g.fillRect(0, 0, FW, FH);
+            g.globalCompositeOperation = 'source-over';
+
+            // 影用シルエット
+            const s = document.createElement('canvas');
+            s.width = c.width;
+            s.height = c.height;
+            const sg = s.getContext('2d');
+            sg.drawImage(c, 0, 0);
+            sg.globalCompositeOperation = 'source-in';
+            sg.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            sg.fillRect(0, 0, s.width, s.height);
+
+            return { finger: c, shadow: s };
+        }
+
+        function ensureFingerSprites() {
+            if (fingerSprites.length) return;
+            SKINS.forEach(skin => {
+                fingerSprites.push({
+                    index: buildFingerSprite(skin, 14),   // 人差し指
+                    middle: buildFingerSprite(skin, 15)   // 中指（少し太く長い）
+                });
+            });
+        }
+
+        // 人差し指と中指が交互に前へ出てトコトコ歩く
+        function drawRealFingertips(ctx, x, y, angle, walkFrame, skinIdx) {
+            const sp = fingerSprites[skinIdx];
+            if (!sp) return;
+
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle + Math.PI / 2 + Math.sin(walkFrame * 0.5) * 0.06);
+            ctx.globalAlpha = 0.9;
+
+            const s = Math.sin(walkFrame);
+            const fingers = [
+                { spr: sp.index,  px: 7.5,  ty: -4 - s * 6 },  // 人差し指（右）
+                { spr: sp.middle, px: -7.5, ty: -8 + s * 6 }   // 中指（左・やや長い）
+            ];
+
+            fingers.forEach(f => {
+                const dx = f.px - FW / 2;
+                const dy = f.ty - 3; // スプライト内で先端は y=3
+                ctx.drawImage(f.spr.shadow, dx + 2, dy + 3, FW, FH);
+                ctx.drawImage(f.spr.finger, dx, dy, FW, FH);
+            });
+
+            ctx.restore();
+        }
+
+        function drawFingerCharacter(ctx, x, y, angle, walkFrame, isPlayer = false, mainColor = '#fca5a5') {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle + Math.PI / 2); // 進行方向を上に向かせる調整
+
+            const step = Math.sin(walkFrame) * (isPlayer ? 6 : 5);
+
+            // 右足（人差し指：10px -> 半径5px）
+            const rightX = step;
+            const rightY = -4;
+
+            // 左足（中指：8px -> 半径4px）
+            const leftX = -step;
+            const leftY = 4;
+
+            if (isPlayer) {
+                // プレイヤーの場合（影＋高精細描画）
+                // 影
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.beginPath();
+                ctx.arc(rightX + 2, rightY + 3, 6, 0, Math.PI * 2);
+                ctx.arc(leftX + 2, leftY + 3, 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 人差し指（右足：直径10px）
+                ctx.fillStyle = '#fecdd3';
+                ctx.strokeStyle = '#f43f5e';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(rightX, rightY, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // 中指（左足：直径8px）
+                ctx.beginPath();
+                ctx.arc(leftX, leftY, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // タッチ位置を示す微かなリング
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(0, 0, HIT_RADIUS + 4, 0, Math.PI * 2);
+                ctx.stroke();
+
+            } else {
+                // NPCの場合
+                ctx.fillStyle = mainColor;
+                ctx.globalAlpha = 0.45; // 背景になじませる透明度
+
+                // 右足（人差し指）
+                ctx.beginPath();
+                ctx.arc(rightX, rightY, 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 左足（中指）
+                ctx.beginPath();
+                ctx.arc(leftX, leftY, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // ==========================================
+        // 線（コース）の描画
+        // ==========================================
+        function drawLinePath() {
+            if (currentLinePoints.length < 2) return;
+
+            ctx.save();
+            
+            // 外側の発光グロー効果
+            ctx.strokeStyle = 'rgba(244, 63, 94, 0.25)';
+            ctx.lineWidth = LINE_WIDTH + 8;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            ctx.moveTo(currentLinePoints[0].x, currentLinePoints[0].y);
+            for (let i = 1; i < currentLinePoints.length; i++) {
+                ctx.lineTo(currentLinePoints[i].x, currentLinePoints[i].y);
+            }
+            ctx.stroke();
+
+            // 主線本体
+            ctx.strokeStyle = '#f43f5e';
+            ctx.lineWidth = LINE_WIDTH;
+            ctx.stroke();
+
+            // トラック内側の中心案内線
+            ctx.strokeStyle = '#fef08a';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 6]);
+            ctx.stroke();
+
+            // なぞった部分を緑で表示
+            if (currentPointIndex > 0) {
+                ctx.setLineDash([]);
+                ctx.strokeStyle = '#34d399';
+                ctx.lineWidth = LINE_WIDTH - 4;
+                ctx.beginPath();
+                ctx.moveTo(currentLinePoints[0].x, currentLinePoints[0].y);
+                for (let i = 1; i <= currentPointIndex; i++) {
+                    ctx.lineTo(currentLinePoints[i].x, currentLinePoints[i].y);
+                }
+                ctx.stroke();
+            }
+
+            // スタート＆ゴール地点のサークルマーカー
+            const startPt = currentLinePoints[0];
+            const endPt = currentLinePoints[currentLinePoints.length - 1];
+
+            // スタート地点
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#10b981';
+            ctx.beginPath();
+            ctx.arc(startPt.x, startPt.y, 16, 0, Math.PI * 2);
+            ctx.fill();
+
+            // ゴール地点
+            ctx.fillStyle = '#3b82f6';
+            ctx.beginPath();
+            ctx.arc(endPt.x, endPt.y, 18, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 指が離れている間はスタート丸を脈動させる
+            if (!isTouching) {
+                const head = currentLinePoints[currentPointIndex];
+                const p = (Date.now() % 1000) / 1000;
+                ctx.strokeStyle = `rgba(16, 185, 129, ${1 - p})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(head.x, head.y, 16 + p * 22, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        // ==========================================
+        // イベント処理（タッチ操作）
+        // ==========================================
+        function getCanvasPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function handleTouchStart(e) {
+            if (gameState !== 'PLAYING') return;
+            e.preventDefault();
+
+            const pos = getCanvasPos(e);
+            // 常に緑のスタート丸から開始（指を離すと進捗は最初に戻る）
+            const head = currentLinePoints[currentPointIndex];
+            const d = Math.hypot(pos.x - head.x, pos.y - head.y);
+
+            if (d > START_RADIUS) {
+                showStatusMessage("緑の丸からスタート！", 'bg-slate-700/90', 'text-white', 'border-slate-400');
+                return;
+            }
+
+            fingerPos = pos;
+            prevFingerPos = pos;
+            fingerSpeed = 0;
+            isTouching = true;
+        }
+
+        function handleTouchMove(e) {
+            if (gameState !== 'PLAYING' || !isTouching) return;
+            e.preventDefault();
+
+            const pos = getCanvasPos(e);
+            const dx = pos.x - prevFingerPos.x;
+            const dy = pos.y - prevFingerPos.y;
+            const dist = Math.hypot(dx, dy);
+            fingerSpeed = dist;
+            playerWalkFrame += dist * 0.15;
+
+            // 速く動かしても取りこぼさないよう、移動経路を細かく補間して判定
+            const steps = Math.max(1, Math.ceil(dist / 4));
+            const from = { x: prevFingerPos.x, y: prevFingerPos.y };
+            fingerPos = pos;
+            prevFingerPos = pos;
+            for (let s = 1; s <= steps; s++) {
+                const t = s / steps;
+                if (!checkLineHit(from.x + dx * t, from.y + dy * t)) return;
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if (gameState !== 'PLAYING') return;
+            e.preventDefault();
+            if (!isTouching) return;
+            isTouching = false;
+            // 指を離したら最初からやり直し（線はそのまま）
+            if (currentPointIndex > 0 && !lineCompleted) {
+                currentPointIndex = 0;
+                showStatusMessage("指が離れた！最初から", 'bg-slate-700/90', 'text-white', 'border-slate-400');
+            }
+        }
+
+        // イベントリスナー登録
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+        canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
+        // PCマウス操作対応（デバッグ・PCブラウザテスト用）
+        canvas.addEventListener('mousedown', handleTouchStart);
+        canvas.addEventListener('mousemove', handleTouchMove);
+        canvas.addEventListener('mouseup', handleTouchEnd);
+        canvas.addEventListener('mouseleave', handleTouchEnd);
+
+        // ==========================================
+        // 当たり判定 & 進捗判定
+        // ==========================================
+        // 戻り値: true=続行 / false=クリアでステージ終了
+        function checkLineHit(fx, fy) {
+            const n = currentLinePoints.length;
+            if (n === 0 || lineCompleted) return false;
+
+            // 現在の進捗位置から先の限られた範囲だけを探す（近道・ワープ不可）
+            const from = currentPointIndex;
+            const to = Math.min(n - 1, currentPointIndex + SEARCH_WINDOW);
+            let minDist = Infinity;
+            let nearestIdx = from;
+
+            for (let i = from; i <= to; i++) {
+                const pt = currentLinePoints[i];
+                const dist = Math.hypot(fx - pt.x, fy - pt.y);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearestIdx = i;
+                }
+            }
+
+            // 線から外れている間は進捗が進まないだけ（ミスにはならない）
+            if (minDist > TOLERANCE) return true;
+
+            if (nearestIdx > currentPointIndex) currentPointIndex = nearestIdx;
+
+            // ゴール判定：線の終点まで順番にたどり着いた時だけクリア
+            if (currentPointIndex >= n - 1 - END_MARGIN) {
+                lineCompleted = true;
+                triggerClear();
+                return false;
+            }
+            return true;
+        }
+
+        // ステージクリア時
+        function triggerClear() {
+            clearCount++;
+            scoreDisplay.textContent = clearCount;
+            showStatusMessage("CLEAR!!", 'bg-emerald-600/90', 'text-white', 'border-emerald-400');
+            nextStage();
+        }
+
+        function showStatusMessage(text, bgColor, textColor, borderColor) {
+            statusText.textContent = text;
+            statusText.className = `text-2xl font-black px-6 py-3 rounded-2xl shadow-xl border-2 backdrop-blur-md inline-block ${bgColor} ${textColor} ${borderColor}`;
+            statusMessage.style.opacity = '1';
+
+            setTimeout(() => {
+                statusMessage.style.opacity = '0';
+            }, 700);
+        }
+
+        // 次のステージへ切り替え
+        function nextStage() {
+            isTouching = false;
+            currentPointIndex = 0;
+            lineCompleted = false;
+            currentLinePoints = resampleLine(generateRandomLine());
+        }
+
+        // ==========================================
+        // メインゲームループ
+        // ==========================================
+        function update(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            if (gameState === 'PLAYING') {
+                // 制限時間カウントダウン
+                timer -= dt;
+                if (timer <= 0) {
+                    timer = 0;
+                    endGame();
+                }
+                timerDisplay.textContent = timer.toFixed(1) + 's';
+            }
+
+            // 背景NPC更新
+            updateNPCs();
+
+            // 描画
+            render();
+
+            requestAnimationFrame(update);
+        }
+
+        function render() {
+            // 背景クリア
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+            // 1. 背景NPC（リアルな指先）— 線を隠さないよう線の下に描画
+            npcs.forEach(npc => drawRealFingertips(ctx, npc.x, npc.y, npc.angle, npc.walkFrame, npc.skin));
+
+            // 2. 線の描画
+            if (gameState === 'PLAYING') {
+                drawLinePath();
+            }
+
+            // 3. プレイヤー指キャラ描画（最前面）
+            if (gameState === 'PLAYING' && isTouching && currentLinePoints.length > 0) {
+                // 向きの計算（線に沿ったベクトル dx, dy）
+                let angle = 0;
+                const currPt = currentLinePoints[currentPointIndex];
+                const nextPt = currentLinePoints[Math.min(currentPointIndex + 6, currentLinePoints.length - 1)];
+
+                if (currPt && nextPt && (currPt.x !== nextPt.x || currPt.y !== nextPt.y)) {
+                    const dx = nextPt.x - currPt.x;
+                    const dy = nextPt.y - currPt.y;
+                    angle = Math.atan2(dy, dx);
+                }
+
+                drawFingerCharacter(ctx, fingerPos.x, fingerPos.y, angle, playerWalkFrame, true);
+            }
+        }
+
+        // ==========================================
+        // ゲーム進行制御
+        // ==========================================
+        function startGame() {
+            gameState = 'PLAYING';
+            timer = GAME_TIME;
+            clearCount = 0;
+            scoreDisplay.textContent = '0';
+            timerDisplay.textContent = GAME_TIME.toFixed(1) + 's';
+
+            screenStart.classList.add('hidden');
+            screenResult.classList.add('hidden');
+
+            initNPCs();
+            nextStage();
+        }
+
+        function endGame() {
+            gameState = 'GAMEOVER';
+            resultClear.textContent = clearCount;
+            screenResult.classList.remove('hidden');
+        }
+
+        // ボタンイベント
+        btnStart.addEventListener('click', startGame);
+        btnRetry.addEventListener('click', startGame);
+
+        // 初期化処理
+        window.onload = function () {
+            resizeCanvas();
+            initNPCs();
+            requestAnimationFrame(update);
+        };
+    </script>
+</body>
+</html>
